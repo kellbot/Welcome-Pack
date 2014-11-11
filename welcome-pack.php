@@ -73,6 +73,8 @@ class DP_Welcome_Pack {
 	 * @since 3.0
 	 * @static
 	 */
+	public $notifications;
+
 	public static function &init() {
 		static $instance = false;
 
@@ -94,6 +96,7 @@ class DP_Welcome_Pack {
 	 * @since 3.0
 	 */
 	public function __construct() {
+
 		// Load globally shared filters
 		require( dirname( __FILE__ ) . '/welcome-pack-filters.php' );
 
@@ -124,14 +127,93 @@ class DP_Welcome_Pack {
 		 * Email customisation
 		 */
 		if ( $settings['dpw_emailtoggle'] ) {
-			$subjects = apply_filters( 'dpw_raw_email_subjects', array( 'bp_activity_at_message_notification_subject', 'bp_activity_new_comment_notification_subject', 'bp_activity_new_comment_notification_comment_author_subject', 'bp_core_activation_signup_blog_notification_subject', 'bp_core_activation_signup_user_notification_subject', 'groups_at_message_notification_subject', 'friends_notification_new_request_subject', 'friends_notification_accepted_request_subject', 'groups_notification_group_updated_subject', 'groups_notification_new_membership_request_subject', 'groups_notification_membership_request_completed_subject', 'groups_notification_promoted_member_subject', 'groups_notification_group_invites_subject', 'bp_core_signup_send_validation_email_subject', 'messages_notification_new_message_subject' ) );
-			foreach ( (array) $subjects as $filter_name )
-				add_filter( $filter_name, array( 'DP_Welcome_Pack', 'email_subject' ), 14, 10 );
-
-			$messages = apply_filters( 'dpw_raw_email_messages', array( 'bp_activity_at_message_notification_message', 'bp_activity_new_comment_notification_message', 'bp_activity_new_comment_notification_comment_author_message', 'bp_core_activation_signup_blog_notification_message', 'bp_core_activation_signup_user_notification_message', 'groups_at_message_notification_message', 'friends_notification_new_request_message', 'friends_notification_accepted_request_message', 'groups_notification_group_updated_message', 'groups_notification_new_membership_request_message', 'groups_notification_membership_request_completed_message', 'groups_notification_promoted_member_message', 'groups_notification_group_invites_message', 'bp_core_signup_send_validation_email_message', 'messages_notification_new_message_message' ) );
-	 		foreach ( (array) $messages as $filter_name )
-				add_filter( $filter_name, array( 'DP_Welcome_Pack', 'email_message' ), 14, 10 );
+			$notifications = $this->get_notifications();
+			foreach ( (array) $notifications as $filter_names ) {
+				add_filter( $filter_names['subject'], array( 'DP_Welcome_Pack', 'email_subject' ), 14, 10 );
+				add_filter( $filter_names['message'], array( 'DP_Welcome_Pack', 'email_message' ), 14, 10 );
+			}
 		}
+	}
+
+	public static function get_eid_from_filter($filter){
+		foreach (DP_Welcome_Pack::get_notifications() as $key => $val) {
+       		if ($val['subject'] === $filter) {
+           		return $val['eid'];
+      		}
+   		}
+	}
+
+	public static function set_custom_tokens(){
+		return apply_filters('dpw_set_custom_tokens', array());
+	}
+
+	public static function get_notifications(){
+					//Set up the notification types and their appropriate filters. [type] => ([subject] => subject_filter_hook, [message] => body_filter_hook)
+			$notifications = array(
+				'Mention' 				=> array(
+					'eid'=>12,
+					'subject'=>'bp_activity_at_message_notification_subject', 		
+					'message'=>'bp_activity_at_message_notification_message'),
+				'Replied to a Comment' 			=> array(
+					'eid'=>14,
+					'subject'=>'bp_activity_new_comment_notification_subject', 		
+					'message'=>'bp_activity_new_comment_notification_message'),
+				'Replied to an Update' 	=> array(
+					'eid'=> 13,
+					'subject'=>'bp_activity_new_comment_notification_comment_author_subject', 
+					'message'=>'bp_activity_new_comment_notification_comment_author_message'),
+				'Blog Activation' 		=> array(
+					'eid' => 2,
+					'subject'=>'bp_core_activation_signup_blog_notification_subject',
+					'message'=>'bp_core_activation_signup_blog_notification_message'),
+				'User Activation' 		=> array(
+					'eid' => 1,
+					'subject'=>'bp_core_activation_signup_user_notification_subject', 
+					'message'=>'bp_core_activation_signup_user_notification_message'),
+				'Groups Mention' 		=> array(
+					'eid' => 6,
+					'subject'=>'groups_at_message_notification_subject', 
+					'message'=>'groups_at_message_notification_message'),
+				'Friend Request' 		=> array(
+					'eid' => 11,
+					'subject'=>'friends_notification_new_request_subject', 
+					'message'=>'friends_notification_new_request_message'),
+				'Friend Accepted' 		=> array(
+					'eid' => 10,
+					'subject'=>'friends_notification_accepted_request_subject', 
+					'message'=>'friends_notification_accepted_request_message'),
+				'Group Updated' 		=> array(
+					'eid' => 4,
+					'subject'=>'groups_notification_group_updated_subject', 
+					'message'=>'groups_notification_group_updated_message'),
+				'Group Membership Request' 	=> array(
+					'eid' => 5,
+					'subject'=>'groups_notification_new_membership_request_subject', 
+					'message'=>'groups_notification_new_membership_request_message'),
+				'Group Membership Accepted' => array(
+					'eid' => 6,
+					'subject'=>'groups_notification_membership_request_completed_subject', 
+					'message'=>'groups_notification_membership_request_completed_message'),
+				'Group Member Promotion'	=> array(
+					'eid' => 8,
+					'subject'=>'groups_notification_promoted_member_subject', 
+					'message'=>'groups_notification_promoted_member_message'),
+				'Group Invitation' 			=> array(
+					'eid' => 9,
+					'subject'=>'groups_notification_group_invites_subject', 
+					'message'=>'groups_notification_group_invites_message'),
+				'Email Validation' 			=> array(
+					'eid' => 14,
+					'subject'=>'bp_core_signup_send_validation_email_subject', 
+					'message'=>'bp_core_signup_send_validation_email_message'),
+				'New Message'	 			=> array(
+					'eid' => 3,
+					'subject'=>'messages_notification_new_message_subject', 
+					'message'=>'messages_notification_new_message_message' ),
+				);
+
+			$notifications = apply_filters('dpw_custom_notifications', $notifications);
+			return $notifications;
 	}
 
 	/**
@@ -558,6 +640,9 @@ To view the original activity, your comment and all replies, log in and visit: %
 		if ( !isset( $bp->welcome_pack ) || !isset( $bp->welcome_pack->$subject ) )
 			DP_Welcome_Pack::email_load_emails( $subject );
 
+		//get eid of current message
+		$bp->welcome_pack->eid = DP_Welcome_Pack::get_eid_from_filter(current_filter());
+
 		// Store the subject as a key so that the email_message filter knows which email to lookup
 		$bp->welcome_pack->current_email_subject = $subject;
 
@@ -573,6 +658,7 @@ To view the original activity, your comment and all replies, log in and visit: %
 		if ( !empty( $args[0] ) )
 			$subject = sprintf( $bp->welcome_pack->$subject->subject, $args[0] );
 
+		$subject = $subject . current_filter();
 		return apply_filters( 'dpw_email_subject', $subject, $original_subject );
 	}
 
@@ -593,6 +679,7 @@ To view the original activity, your comment and all replies, log in and visit: %
 
 		// Find the stored subject line so that we can grab the appropriate email object
 		$subject = $bp->welcome_pack->current_email_subject;
+		$eid = $bp->welcome_pack->eid;
 
 		// Check that a new message is set; see email_subject()
 		if ( empty( $bp->welcome_pack->$subject->message ) )
@@ -622,17 +709,17 @@ To view the original activity, your comment and all replies, log in and visit: %
 		 */
 		$replace_last_i18n = 0;
 
-		switch ( $subject ) {
-			case __( 'Activate Your Account', 'buddypress' ):
+		switch ( $eid ) {
+			case 1: //activate your account
 				$t[0] = $args[1];
 			break;
 
-			case __( 'Activate %s', 'buddypress' ):
+			case 2: //activate blog
 				$t[0] = $args[0];
 				$t[1] = $args[1];
 			break;
 
-			case __( 'New message from %s', 'buddypress' ):
+			case 3: //new private message
 				$t[0] = $args[0];
 				$t[1] = $args[1];
 				$t[2] = $args[2];
@@ -640,14 +727,14 @@ To view the original activity, your comment and all replies, log in and visit: %
 				$t[4] = $args[4];  // Notification settings
 			break;
 
-			case __( 'Group Details Updated', 'buddypress' ):
+			case 4: //group details updated
 				$t[0] = $args[0]->name;
 				$t[1] = $args[1];
 				$t[2] = $args[2];  // Notification settings
 				$replace_last_i18n = 3;
 			break;
 
-			case __( 'Membership request for group: %s', 'buddypress' ):
+			case 5: //group membership request
 				$t[0] = $args[1];
 				$t[1] = $args[0]->name;
 				$t[2] = $args[3];
@@ -657,21 +744,21 @@ To view the original activity, your comment and all replies, log in and visit: %
 				$replace_last_i18n = 6;
 			break;
 
-			case __( 'Membership request for group "%s" accepted', 'buddypress' ):
+			case 6: //group membership accepted
 				$t[0] = $args[0]->name;
 				$t[1] = $args[1];
 				$t[2] = $args[2];  // Notification settings
 				$replace_last_i18n = 3;
 			break;
 
-			case __( 'Membership request for group "%s" rejected', 'buddypress' ):
+			case 7: //group membership rejected
 				$t[0] = $args[0]->name;
 				$t[1] = $args[1];
 				$t[2] = $args[2];  // Notification settings
 				$replace_last_i18n = 3;
 			break;
 
-			case __( 'You have been promoted in the group: "%s"', 'buddypress' ):
+			case 8: //group promotion
 				$t[0] = $args[1];
 				$t[1] = $args[0]->name;
 				$t[2] = $args[2];
@@ -679,7 +766,7 @@ To view the original activity, your comment and all replies, log in and visit: %
 				$replace_last_i18n = 4;
 			break;
 
-			case __( 'You have an invitation to the group: "%s"', 'buddypress' ):
+			case 9: //group invitation
 				$t[0] = $args[1];
 				$t[1] = $args[0]->name;
 				$t[2] = $args[3];
@@ -690,7 +777,7 @@ To view the original activity, your comment and all replies, log in and visit: %
 				$replace_last_i18n = 7;
 			break;
 
-			case __( '%s accepted your friendship request', 'buddypress' ):
+			case 10: //friend request accepted
 				$t[0] = $args[0];
 				$t[1] = $args[0];
 				$t[2] = $args[1];
@@ -698,7 +785,7 @@ To view the original activity, your comment and all replies, log in and visit: %
 				$replace_last_i18n = 4;
 			break;
 
-			case __( 'New friendship request from %s', 'buddypress' ):
+			case 11: //new friend request
 				$t[0] = $args[0];
 				$t[1] = $args[2];
 				$t[2] = $args[0];
@@ -707,7 +794,7 @@ To view the original activity, your comment and all replies, log in and visit: %
 				$replace_last_i18n = 5;
 			break;
 
-			case __( '%s mentioned you in an update', 'buddypress' ):
+			case 12: // @mention
 				if ( bp_is_active( 'groups' ) && bp_is_group() ) {
 					$t[0] = $args[0];
 					$t[1] = bp_get_current_group_name();
@@ -725,7 +812,7 @@ To view the original activity, your comment and all replies, log in and visit: %
 				}
 			break;
 
-			case __( '%s replied to one of your updates', 'buddypress' ):
+			case 13: //reply to update
 				$t[0] = $args[0];
 				$t[1] = $args[1];
 				$t[2] = $args[2];
@@ -741,6 +828,8 @@ To view the original activity, your comment and all replies, log in and visit: %
 				$t[3] = $args[2];  // Notification settings
 				$replace_last_i18n = 4;
 			break;*/
+			default:
+				$t = DP_Welcome_Pack::set_custom_tokens();
 		}
 
 		$msg = $bp->welcome_pack->$subject->message;
