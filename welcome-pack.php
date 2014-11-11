@@ -135,10 +135,10 @@ class DP_Welcome_Pack {
 		}
 	}
 
-	public static function get_eid_from_filter($filter){
+	public static function get_notification_from_filter($filter){
 		foreach (DP_Welcome_Pack::get_notifications() as $key => $val) {
-       		if ($val['subject'] === $filter) {
-           		return $val['eid'];
+       		if ($val['subject'] === $filter || $val['message'] == $filter) {
+           		return $val;
       		}
    		}
 	}
@@ -211,6 +211,14 @@ class DP_Welcome_Pack {
 					'subject'=>'messages_notification_new_message_subject', 
 					'message'=>'messages_notification_new_message_message' ),
 				);
+
+			// register bbpress message hooks if appropriate
+			if(class_exists('bbPress')) {
+				$notifications['Forum Reply'] = array(
+					'eid' => 100,
+					'subject' => 'bbp_subscription_mail_title',
+					'message' => 'bbp_subscription_mail_message');
+			}
 
 			$notifications = apply_filters('dpw_custom_notifications', $notifications);
 			return $notifications;
@@ -552,38 +560,6 @@ To view the original activity, your comment and all replies, log in and visit: %
 	}
 
 	/**
-	 * Get list of email templates.
-	 *
-	 * This is so we can map BuddyPress' emails (via subject line) to one of our email posts.
-	 * Parts of this function intentionally use the BuddyPress text domain.
-	 *
-	 * @return array Associative array like ['BP Email Subject' => 'Welcome Pack Email ID']
-	 * @since 3.0
-	 * @static
-	 * @todo The email ID mapping sucks and should be done better; see email_meta_box()
-	 */
-	public static function email_get_types() {
-		$emails = array(
-			__( 'Activate Your Account', 'buddypress' )                      => 1,
-			__( 'Activate %s', 'buddypress' )                                => 2,
-			__( 'New message from %s', 'buddypress' )                        => 3,
-			__( 'Group Details Updated', 'buddypress' )                      => 4,
-			__( 'Membership request for group: %s', 'buddypress' )           => 5,
-			__( 'Membership request for group "%s" accepted', 'buddypress' ) => 6,
-			__( 'Membership request for group "%s" rejected', 'buddypress' ) => 7,
-			__( 'You have been promoted in the group: "%s"', 'buddypress' )  => 8,
-			__( 'You have an invitation to the group: "%s"', 'buddypress' )  => 9,
-			__( '%s accepted your friendship request', 'buddypress' )        => 10,
-			__( 'New friendship request from %s', 'buddypress' )             => 11,
-			__( '%s mentioned you in an update', 'buddypress' )              => 12,
-			__( '%s replied to one of your updates', 'buddypress' )          => 13,
-//			__( '%s replied to one of your comments', 'buddypress' )         => 14,  // See http://buddypress.trac.wordpress.org/ticket/3634
-		);
-
-		return apply_filters( 'dpw_email_get_types', $emails );
-	}
-
-	/**
 	 * Send emails as HTML
 	 *
 	 * @return string Email content type
@@ -592,6 +568,26 @@ To view the original activity, your comment and all replies, log in and visit: %
 	 */
 	public static function email_set_content_type() {
 		return apply_filters( 'dpw_email_set_content_type', 'text/html' );
+	}
+
+	// Populates the current email id and subject into a global object so we can easily get it later
+	public function set_up_current_email(){
+		global $bp;
+
+		//Fetch the eid for the type of notification we have
+		$notification = DP_Welcome_Pack::get_notification_from_filter(current_filter());
+		$eid = $notification['eid'];
+
+		// Fetch relevant email details from database, if not done previously
+		if ( !isset( $bp->welcome_pack ) || !isset( $bp->welcome_pack->$eid ) )
+			DP_Welcome_Pack::email_load_emails( $eid );
+
+		// Store the subject as a key so that the email_message filter knows which email to lookup
+		$bp->welcome_pack->current_email_eid = $eid;
+		$bp->welcome_pack->current_email_subject = $subject;
+
+		return $eid;
+
 	}
 
 	/**
@@ -636,18 +632,10 @@ To view the original activity, your comment and all replies, log in and visit: %
 			$subject = str_replace( $args[0], '%s', $subject );
 		}
 
-		// Fetch relevant email details from database, if not done previously
-		if ( !isset( $bp->welcome_pack ) || !isset( $bp->welcome_pack->$subject ) )
-			DP_Welcome_Pack::email_load_emails( $subject );
-
-		//get eid of current message
-		$bp->welcome_pack->eid = DP_Welcome_Pack::get_eid_from_filter(current_filter());
-
-		// Store the subject as a key so that the email_message filter knows which email to lookup
-		$bp->welcome_pack->current_email_subject = $subject;
+		$eid = DP_Welcome_Pack::set_up_current_email();
 
 		// Check that a new subject is set
-		if ( empty( $bp->welcome_pack->$subject ) || empty( $bp->welcome_pack->$subject->subject ) )
+		if ( empty( $bp->welcome_pack->$eid ) || empty( $bp->welcome_pack->$eid->subject ) )
 			return $original_subject;
 
 		// Set the content type to HTML (@todo: things after this might bug out if the subject line is left intentionally blank)
@@ -655,10 +643,15 @@ To view the original activity, your comment and all replies, log in and visit: %
 			add_filter( 'wp_mail_content_type', array( 'DP_Welcome_Pack', 'email_set_content_type' ) );
 
 		// Was there a token? Maybe reverse-reverse tokenise the subject.
-		if ( !empty( $args[0] ) )
-			$subject = sprintf( $bp->welcome_pack->$subject->subject, $args[0] );
-
-		$subject = $subject . current_filter();
+		if ( !empty( $args[0] ) ) {
+			switch ((int) $eid) {
+				case 100:
+					$subject = sprintf( $bp->welcome_pack->$eid->subject, bbp_get_topic_title($args[1]));
+					break;
+				default:
+					$subject = sprintf( $bp->welcome_pack->$eid->subject, $args[0] );
+			}
+		}
 		return apply_filters( 'dpw_email_subject', $subject, $original_subject );
 	}
 
@@ -674,15 +667,18 @@ To view the original activity, your comment and all replies, log in and visit: %
 	public function email_message( $original_message ) {
 		global $bp;
 
-		if ( empty( $bp->welcome_pack->current_email_subject ) )
-			return $original_message;
+		
+		if ( empty( $bp->welcome_pack->current_email_eid ) ) {
+			$eid = DP_Welcome_Pack::set_up_current_email();
+			if (is_null($eid)) return $original_message;
+		}
 
 		// Find the stored subject line so that we can grab the appropriate email object
 		$subject = $bp->welcome_pack->current_email_subject;
-		$eid = $bp->welcome_pack->eid;
+		$eid = $bp->welcome_pack->current_email_eid;
 
 		// Check that a new message is set; see email_subject()
-		if ( empty( $bp->welcome_pack->$subject->message ) )
+		if ( empty( $bp->welcome_pack->$eid->message ) )
 			return $original_message;
 
 		// Get the unknown number of unknown strings which we need to run through sprintf() to rebuild the original email
@@ -820,6 +816,12 @@ To view the original activity, your comment and all replies, log in and visit: %
 				$replace_last_i18n = 4;
 			break;
 
+			case 100: //bbpress topic reply
+				$t[0] = bbp_get_reply_author_display_name($args[0]);
+				$t[1] = bbp_get_reply_content($args[0]);
+				$t[2] = bbp_get_reply_url($args[0]);
+				//$replace_last_i18n = 3;
+			break;
 			// See http://buddypress.trac.wordpress.org/ticket/3634
 			/*case __( '%s replied to one of your comments', 'buddypress' ):
 				$t[0] = $args[0];
@@ -832,7 +834,7 @@ To view the original activity, your comment and all replies, log in and visit: %
 				$t = DP_Welcome_Pack::set_custom_tokens();
 		}
 
-		$msg = $bp->welcome_pack->$subject->message;
+		$msg = $bp->welcome_pack->$eid->message;
 
 		if ( $replace_last_i18n ) {
 			$last_pos = strrpos( $msg, '%s' );
@@ -842,9 +844,9 @@ To view the original activity, your comment and all replies, log in and visit: %
 		$new_message = sprintf( $msg, $t[0], $t[1], $t[2], $t[3], $t[4], $t[5], $t[6], $t[7], $t[8], $t[9] );
 
 		// Find the email template
-		$template_path = locate_template( $bp->welcome_pack->$subject->template );
+		$template_path = locate_template( $bp->welcome_pack->$eid->template );
 		if ( empty( $template_path ) ) {
-			if ( 'simplicity.php' == $bp->welcome_pack->$subject->template )
+			if ( 'simplicity.php' == $bp->welcome_pack->$eid->template )
 				$template_path = apply_filters( 'dpw_default_email_template', WP_PLUGIN_DIR . '/welcome-pack/templates/simplicity.php' );
 			else
 				$template_path = apply_filters( 'dpw_default_email_template', WP_PLUGIN_DIR . '/welcome-pack/templates/welcome_pack_default.php' );
@@ -868,20 +870,17 @@ To view the original activity, your comment and all replies, log in and visit: %
 	 * @param string $subject Email subject
 	 * @global object $bp
 	 */
-	public function email_load_emails( $subject ) {
+	public function email_load_emails( $eid ) {
 		global $bp;
 
 		if ( !isset( $bp->welcome_pack ) )
 			$bp->welcome_pack = new stdClass();
 
-		// Triple-check that the email subject passed matches one of the hardcoded email types
-		$email_types = DP_Welcome_Pack::email_get_types();
-
 		// This email hasn't been loaded from the database
-		if ( !empty( $email_types[$subject] ) && !isset( $bp->welcome_pack->$subject ) ) {
-			$bp->welcome_pack->$subject = new stdClass;
+		if ( !empty( $eid ) && !isset( $bp->welcome_pack->$eid ) ) {
+			$bp->welcome_pack->$eid = new stdClass;
 
-			$email = get_posts( array( 'meta_key' => 'welcomepack_type', 'meta_value' => (int) $email_types[$subject], 'numberposts' => 1, 'post_type' => 'dpw_email', ) );
+			$email = get_posts( array( 'meta_key' => 'welcomepack_type', 'meta_value' => (int) $eid, 'numberposts' => 1, 'post_type' => 'dpw_email', ) );
 			if ( !$email || is_wp_error( $email ) )
 				return;
 
@@ -889,13 +888,11 @@ To view the original activity, your comment and all replies, log in and visit: %
 			$post_content = apply_filters( 'the_content', $email->post_content );
 			$post_title   = apply_filters( 'dpw_email_subject', $email->post_title, $email->ID );
 
-			$bp->welcome_pack->$subject->message  = $post_content;
-			$bp->welcome_pack->$subject->subject  = $post_title;
-			$bp->welcome_pack->$subject->template = get_post_meta( $email->ID, 'welcomepack_template', true );
+			$bp->welcome_pack->$eid->message  = $post_content;
+			$bp->welcome_pack->$eid->subject  = $post_title;
+			$bp->welcome_pack->$eid->template = get_post_meta( $email->ID, 'welcomepack_template', true );
 		}
 
-		// Allow third-party plugins to modify the updated email text
-		do_action( 'dpw_email_load_emails', $subject );
 	}
 }
 add_action( 'bp_include', array( 'DP_Welcome_Pack', 'init' ) );

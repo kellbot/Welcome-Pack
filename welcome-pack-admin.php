@@ -885,23 +885,12 @@ class DP_Welcome_Pack_Admin {
 
 	<p><strong><?php _e( 'Use this email for:', 'dpw' ); ?></strong></p>
 	<label class="screen-reader-text" for="dpw_email_for"><?php _e( 'Use this email for:', 'dpw' ); ?></label>
+	
+	<?php $notifications = DP_Welcome_Pack::get_notifications(); ?>
 	<select name="dpw_email_for" id="dpw_email_for">
-		<option value="0" <?php selected( $current_email_type, 0 ); ?>><?php _e( '-----', 'dpw' ); ?></option>
-		<option value="1" <?php selected( $current_email_type, 1 ); ?>><?php _e( 'Account activation', 'dpw' ); ?></option>
-		<option value="2" <?php selected( $current_email_type, 2 ); ?>><?php _e( 'Account and blog activation', 'dpw' ); ?></option>
-		<option value="10" <?php selected( $current_email_type, 10 ); ?>><?php _e( 'Friendship request accepted', 'dpw' ); ?></option>
-		<option value="4" <?php selected( $current_email_type, 4 ); ?>><?php _e( 'Group details updated', 'dpw' ); ?></option>
-		<option value="5" <?php selected( $current_email_type, 5 ); ?>><?php _e( 'Group membership request', 'dpw' ); ?></option>
-		<option value="6" <?php selected( $current_email_type, 6 ); ?>><?php _e( 'Group membership request accepted', 'dpw' ); ?></option>
-		<option value="7" <?php selected( $current_email_type, 7 ); ?>><?php _e( 'Group membership request rejected', 'dpw' ); ?></option>
-		<option value="9" <?php selected( $current_email_type, 9 ); ?>><?php _e( 'Invitation to a group', 'dpw' ); ?></option>
-		<option value="12" <?php selected( $current_email_type, 12 ); ?>><?php _e( 'Mentioned in an update', 'dpw' ); ?></option>
-		<option value="11" <?php selected( $current_email_type, 11 ); ?>><?php _e( 'New friendship request', 'dpw' ); ?></option>
-		<option value="3" <?php selected( $current_email_type, 3 ); ?>><?php _e( 'New private message', 'dpw' ); ?></option>
-		<option value="8" <?php selected( $current_email_type, 8 ); ?>><?php _e( 'Promoted in a group', 'dpw' ); ?></option>
-		<option value="14" <?php selected( $current_email_type, 14 ); ?>><?php _e( 'Replied to a comment', 'dpw' ); ?></option>
-		<option value="13" <?php selected( $current_email_type, 13 ); ?>><?php _e( 'Replied to an update', 'dpw' ); ?></option>
-
+		<?php foreach ($notifications as $label => $type): ?>
+			<option value="<?php echo $type['eid']; ?>" <?php selected( $current_email_type, $type['eid'] ); ?>><?php _e( $label, 'dpw' ); ?></option>
+		<?php endforeach; ?>
 		<?php do_action( 'dpw_email_meta_box', $current_email_type ); ?>
 	</select>
 
